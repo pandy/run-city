@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "跑城",
+    "slug": "run-city",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#F5F7FA"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "跑城需要使用你的位置，用于计算你到跑步路线的距离。"
+        }
+      ],
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "跑城读取你的跑步训练与运动路线，用于展示跑步记录并标记已经跑过的城市路线。",
+          "NSHealthUpdateUsageDescription": "跑城不会修改健康记录；此权限仅用于启用 HealthKit 能力。",
+          "background": true
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.runcity.app",
+      "buildNumber": "1"
+    },
+    "android": {
+      "package": "com.runcity.app",
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
+    },
+    "extra": {
+      "eas": {
+        "projectId": "b65c36dc-b5f9-405c-9304-e13148071d1d"
+      }
+    },
+    "owner": "13671562706"
+  }
+}
