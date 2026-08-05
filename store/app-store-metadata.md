@@ -12,6 +12,9 @@
 - 价格：免费
 - 类别：健康健美
 - 年龄分级：待在 App Store Connect 按最终内容问卷确认
+- 官网 URL：`https://pandy.github.io/run-city/`
+- 隐私政策 URL：`https://pandy.github.io/run-city/privacy.html`
+- 支持 URL：`https://pandy.github.io/run-city/support.html`
 
 ## 宣传文案
 
@@ -37,7 +40,6 @@
 
 ## 上架前待补材料
 
-1. 可公开访问的隐私政策 URL
-2. 每条路线的实跑核验日期、起终点、开放时间和安全提示
-3. iPhone 6.7 英寸与 6.5 英寸真实设备截图
-4. 可用的 Apple Developer / App Store Connect 权限与唯一 Bundle ID
+1. 每条路线的实跑核验日期、起终点、开放时间和安全提示
+2. iPhone 6.7 英寸与 6.5 英寸真实设备截图
+3. 可用的 Apple Developer / App Store Connect 权限与唯一 Bundle ID
