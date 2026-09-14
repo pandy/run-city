@@ -13,6 +13,7 @@ export type HealthWorkoutRecord = {
   distanceKm?: number;
   durationSeconds?: number;
   averagePaceSecondsPerKm?: number;
+  averageHeartRate?: number;
   calories?: number;
   coordinateSystem: 'wgs84';
   encodedPath: string;
@@ -31,6 +32,7 @@ export type HealthKitSyncResult = {
 
 const WORKOUT_TYPE = 'HKWorkoutTypeIdentifier' as const;
 const WORKOUT_ROUTE_TYPE = 'HKWorkoutRouteTypeIdentifier' as const;
+const HEART_RATE_TYPE = 'HKQuantityTypeIdentifierHeartRate' as const;
 const MAXIMUM_ROUTE_POINTS = 900;
 
 function encodePolyline(points: Coordinate[]) {
@@ -105,7 +107,7 @@ export async function authorizeHealthKit() {
       throw new Error('这台设备无法使用 Apple 健康。');
     }
     await healthKit.requestAuthorization({
-      toRead: [WORKOUT_TYPE, WORKOUT_ROUTE_TYPE],
+      toRead: [WORKOUT_TYPE, WORKOUT_ROUTE_TYPE, HEART_RATE_TYPE],
     });
     await healthKit.configureBackgroundTypes(
       [WORKOUT_TYPE],
@@ -160,6 +162,10 @@ export async function syncHealthKitRunningWorkouts(anchor?: string): Promise<Hea
           routePoints = [];
         }
         const displayPoints = capRoutePoints(routePoints);
+        const heartRateStats = await withTimeout(
+          workout.getStatistic(HEART_RATE_TYPE, 'count/min'),
+          2500,
+        );
         const distanceKm = workout.totalDistance?.quantity === undefined
           ? undefined
           : workout.totalDistance.quantity / 1000;
@@ -178,6 +184,7 @@ export async function syncHealthKitRunningWorkouts(anchor?: string): Promise<Hea
           averagePaceSecondsPerKm: distanceKm && durationSeconds
             ? durationSeconds / distanceKm
             : undefined,
+          averageHeartRate: heartRateStats?.averageQuantity?.quantity,
           calories: workout.totalEnergyBurned?.quantity,
           coordinateSystem: 'wgs84' as const,
           encodedPath: encodePolyline(displayPoints),
