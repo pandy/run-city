@@ -38,6 +38,7 @@ const PERSONAL_RUNS_FILE_NAME = 'run-city-personal-runs.json';
 const HEALTHKIT_RUNS_FILE_NAME = 'run-city-healthkit-runs.json';
 type LocationStatus = 'loading' | 'ready' | 'denied' | 'unavailable' | 'error';
 type HealthSyncStatus = 'unavailable' | 'not-connected' | 'connecting' | 'syncing' | 'ready' | 'error';
+type RunPeriod = 'day' | 'month' | 'year';
 
 type PersonalRun = {
   id: string;
@@ -84,6 +85,23 @@ type StoredHealthKitRuns = {
   lastSyncAt?: string;
   records: PersonalRun[];
 };
+
+function dateForRun(run: PersonalRun) {
+  if (!run.startTime) return undefined;
+  const date = new Date(run.startTime);
+  return Number.isFinite(date.getTime()) ? date : undefined;
+}
+
+function runsForPeriod(runs: PersonalRun[], period: RunPeriod) {
+  const now = new Date();
+  return runs.filter((run) => {
+    const date = dateForRun(run);
+    if (!date) return false;
+    if (period === 'day') return date.toDateString() === now.toDateString();
+    if (period === 'month') return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+    return date.getFullYear() === now.getFullYear();
+  });
+}
 
 function decodePolyline(encoded: string): Coordinate[] {
   const points: Coordinate[] = [];
@@ -193,7 +211,9 @@ function personalRunSourceLabel(run: PersonalRun) {
 
 function formatSyncTime(value?: string) {
   if (!value) return '尚未同步';
-  return value.replace('T', ' ').slice(5, 16);
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return '时间未知';
+  return `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
 function saveHealthKitRuns(payload: StoredHealthKitRuns) {
@@ -205,7 +225,14 @@ function saveHealthKitRuns(payload: StoredHealthKitRuns) {
 
 function formatRunDate(value?: string) {
   if (!value) return '日期未知';
-  return value.replace('T', ' ').slice(0, 16);
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return '日期未知';
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function formatRunDay(value?: string) {
+  const date = new Date(value ?? '');
+  return Number.isFinite(date.getTime()) ? String(date.getDate()).padStart(2, '0') : '--';
 }
 
 function formatRunDuration(value?: number) {
@@ -270,7 +297,9 @@ export default function App() {
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [profileOpen, setProfileOpen] = useState(false);
   const [personalRunsOpen, setPersonalRunsOpen] = useState(false);
+  const [trailOpen, setTrailOpen] = useState(false);
   const [selectedPersonalRunId, setSelectedPersonalRunId] = useState<string>();
+  const [runPeriod, setRunPeriod] = useState<RunPeriod>('month');
   const [importedPersonalRuns, setImportedPersonalRuns] = useState<PersonalRun[]>([]);
   const [healthKitRuns, setHealthKitRuns] = useState<PersonalRun[]>([]);
   const [personalRouteMatches, setPersonalRouteMatches] = useState<Record<string, PersonalRouteMatch>>({});
@@ -279,6 +308,7 @@ export default function App() {
     isHealthKitPlatformSupported() ? 'not-connected' : 'unavailable',
   );
   const [healthSyncError, setHealthSyncError] = useState<string>();
+  const [healthSyncDiagnostics, setHealthSyncDiagnostics] = useState<string>();
   const [healthKitEnabled, setHealthKitEnabled] = useState(false);
   const [lastHealthSyncAt, setLastHealthSyncAt] = useState<string>();
   const [cityOverviewOpen, setCityOverviewOpen] = useState(true);
@@ -338,6 +368,25 @@ export default function App() {
   const personalRunDistanceKm = useMemo(
     () => personalRuns.reduce((total, run) => total + (run.distanceKm ?? 0), 0),
     [personalRuns],
+  );
+  const trailMarkers = useMemo(() => personalRuns.map((run) => {
+    const point = run.encodedPath ? decodePolyline(run.encodedPath)[0] : undefined;
+    if (!point) return undefined;
+    let nearest = coreCities[0];
+    let best = Number.POSITIVE_INFINITY;
+    coreCities.forEach((item) => {
+      const center = cityCenters[item.id];
+      if (!center) return;
+      const distance = (center.latitude - point.latitude) ** 2 + (center.longitude - point.longitude) ** 2;
+      if (distance < best) { best = distance; nearest = item; }
+    });
+    return { run, point, city: nearest };
+  }).filter(Boolean) as Array<{ run: PersonalRun; point: Coordinate; city: typeof coreCities[number] }>, [personalRuns]);
+  const trailProvinceCount = useMemo(() => new Set(trailMarkers.map((item) => item.city.province)).size, [trailMarkers]);
+  const periodRuns = useMemo(() => runsForPeriod(personalRuns, runPeriod), [personalRuns, runPeriod]);
+  const periodDistanceKm = useMemo(
+    () => periodRuns.reduce((total, run) => total + (run.distanceKm ?? 0), 0),
+    [periodRuns],
   );
   const garminRunCount = useMemo(
     () => healthKitRuns.filter((run) => run.source === 'garmin').length,
@@ -433,7 +482,7 @@ export default function App() {
       });
   }, []);
 
-  const performHealthKitSync = useCallback(async (requestPermission = false) => {
+  const performHealthKitSync = useCallback(async (requestPermission = false, forceFull = false) => {
     if (!isHealthKitPlatformSupported()) {
       setHealthSyncStatus('unavailable');
       setHealthSyncError('Apple 健康同步仅支持 iPhone。');
@@ -445,7 +494,7 @@ export default function App() {
     setHealthSyncError(undefined);
     try {
       if (requestPermission) await authorizeHealthKit();
-      const result = await syncHealthKitRunningWorkouts(healthKitAnchorRef.current);
+      const result = await syncHealthKitRunningWorkouts(forceFull ? undefined : healthKitAnchorRef.current);
       const deleted = new Set(result.deletedRecordIds);
       const merged = new Map<string, PersonalRun>();
       healthKitRunsRef.current.forEach((run) => {
@@ -459,6 +508,7 @@ export default function App() {
       setHealthKitRuns(records);
       setHealthKitEnabled(true);
       setLastHealthSyncAt(lastSyncAt);
+      setHealthSyncDiagnostics(`读取 ${result.queriedWorkoutCount} 条，识别 ${result.matchedWorkoutCount} 条`);
       saveHealthKitRuns({
         schemaVersion: 1,
         source: 'apple-health',
@@ -545,7 +595,7 @@ export default function App() {
           ? '立即同步'
           : '连接';
   const healthSyncSubtitle = healthKitEnabled
-    ? `${healthKitRuns.length} 条健康记录${garminRunCount ? `，其中 Garmin ${garminRunCount} 条` : ''} · ${formatSyncTime(lastHealthSyncAt)}`
+    ? `${healthKitRuns.length} 条健康记录${garminRunCount ? `，其中 Garmin ${garminRunCount} 条` : ''} · ${formatSyncTime(lastHealthSyncAt)}${healthSyncDiagnostics ? ` · ${healthSyncDiagnostics}` : ''}`
     : '同步手机与 Apple Watch；Garmin 可同步训练摘要';
 
   const routeDrawerPanResponder = useMemo(() => PanResponder.create({
@@ -671,6 +721,29 @@ export default function App() {
     );
   }
 
+  if (trailOpen) {
+    const trailRegion: Region = { latitude: 35.8, longitude: 106.5, latitudeDelta: 22, longitudeDelta: 35 };
+    return (
+      <SafeAreaView style={styles.screen}>
+        <StatusBar barStyle="dark-content" />
+        <View style={styles.profileHeader}>
+          <Pressable onPress={() => setTrailOpen(false)} style={styles.profileBackButton}><Text style={styles.profileBackText}>‹ 返回</Text></Pressable>
+          <Text style={styles.profileHeaderTitle}>我的轨迹</Text><View style={styles.profileHeaderSpacer} />
+        </View>
+        <MapView style={styles.trailMap} initialRegion={trailRegion}>
+          {trailMarkers.map(({ run, point, city: markerCity }) => (
+            <Marker key={run.id} coordinate={point} title={markerCity.name} description={formatRunDate(run.startTime)} pinColor="#FF5B36" />
+          ))}
+        </MapView>
+        <View style={styles.trailSummaryCard}>
+          <Text style={styles.trailSummaryTitle}>跑过的地方</Text>
+          <Text style={styles.trailSummaryStats}>{trailProvinceCount} 个省份 · {new Set(trailMarkers.map((item) => item.city.id)).size} 个城市</Text>
+          <Text style={styles.trailSummaryCopy}>地图标记来自每条跑步记录的 GPS 起点；没有轨迹的记录不会猜测位置。</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (selectedPersonalRun) {
     return (
       <PersonalRunDetail
@@ -704,7 +777,7 @@ export default function App() {
           </Pressable>
         </View>
         <FlatList
-          data={personalRuns}
+          data={periodRuns}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.personalRunListContent}
           showsVerticalScrollIndicator={false}
@@ -712,13 +785,13 @@ export default function App() {
             <View>
               <View style={styles.personalRunSummaryCard}>
                 <View>
-                  <Text style={styles.personalRunSummaryValue}>{personalRuns.length}</Text>
-                  <Text style={styles.personalRunSummaryLabel}>跑步次数</Text>
+                  <Text style={styles.personalRunSummaryValue}>{periodRuns.length}</Text>
+                  <Text style={styles.personalRunSummaryLabel}>本期次数</Text>
                 </View>
                 <View style={styles.personalRunSummaryDivider} />
                 <View>
-                  <Text style={styles.personalRunSummaryValue}>{personalRunDistanceKm.toFixed(1)}</Text>
-                  <Text style={styles.personalRunSummaryLabel}>累计公里</Text>
+                  <Text style={styles.personalRunSummaryValue}>{periodDistanceKm.toFixed(1)}</Text>
+                  <Text style={styles.personalRunSummaryLabel}>本期公里</Text>
                 </View>
                 <View style={styles.personalRunSummaryDivider} />
                 <View>
@@ -728,11 +801,18 @@ export default function App() {
                   <Text style={styles.personalRunSummaryLabel}>包含轨迹</Text>
                 </View>
               </View>
+              <View style={styles.runPeriodTabs}>
+                {([['day', '日'], ['month', '月'], ['year', '年']] as const).map(([value, label]) => (
+                  <Pressable key={value} onPress={() => setRunPeriod(value)} style={[styles.runPeriodTab, runPeriod === value && styles.runPeriodTabActive]}>
+                    <Text style={[styles.runPeriodTabText, runPeriod === value && styles.runPeriodTabTextActive]}>{label}</Text>
+                  </Pressable>
+                ))}
+              </View>
               {healthKitEnabled ? (
                 <Pressable
                   accessibilityRole="button"
                   disabled={healthSyncBusy}
-                  onPress={() => void performHealthKitSync()}
+                  onPress={() => void performHealthKitSync(false, true)}
                   style={styles.personalRunSyncBar}
                 >
                   <View style={styles.personalRunSyncDot} />
@@ -757,8 +837,8 @@ export default function App() {
               style={({ pressed }) => [styles.personalRunRow, pressed && styles.savedRouteRowPressed]}
             >
               <View style={styles.personalRunDateBadge}>
-                <Text style={styles.personalRunDateDay}>{item.startTime?.slice(8, 10) ?? '--'}</Text>
-                <Text style={styles.personalRunDateMonth}>{item.startTime?.slice(5, 7) ?? '--'}月</Text>
+                <Text style={styles.personalRunDateDay}>{formatRunDay(item.startTime)}</Text>
+                <Text style={styles.personalRunDateMonth}>{item.startTime ? String(new Date(item.startTime).getMonth() + 1).padStart(2, '0') : '--'}月</Text>
               </View>
               <View style={styles.personalRunRowCopy}>
                 <Text style={styles.personalRunRowTitle}>{personalRunSourceLabel(item)} · {item.distanceKm?.toFixed(2) ?? '—'} km</Text>
@@ -842,13 +922,26 @@ export default function App() {
             </View>
           )}
 
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setTrailOpen(true)}
+            style={({ pressed }) => [styles.profileTrailRow, pressed && styles.savedRouteRowPressed]}
+          >
+            <View style={styles.profileMenuIcon}><Text style={styles.profileMenuIconText}>轨</Text></View>
+            <View style={styles.profileMenuCopy}>
+              <Text style={styles.profileMenuTitle}>我的轨迹</Text>
+              <Text style={styles.profileMenuSubtitle}>查看跑过的省份、城市和 GPS 起点</Text>
+            </View>
+            <Text style={styles.profileMenuStatus}>查看 ›</Text>
+          </Pressable>
+
           <Text style={styles.profileDataSectionTitle}>数据与权限</Text>
           <View style={styles.profileMenu}>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Apple 健康同步，${healthSyncActionLabel}`}
               disabled={healthSyncBusy || healthSyncStatus === 'unavailable'}
-              onPress={() => void performHealthKitSync(!healthKitEnabled)}
+              onPress={() => void performHealthKitSync(!healthKitEnabled, true)}
               style={({ pressed }) => [styles.profileMenuRow, pressed && styles.savedRouteRowPressed]}
             >
               <View style={[styles.profileMenuIcon, healthKitEnabled && styles.profileHealthIconReady]}>
@@ -1386,6 +1479,12 @@ const styles = StyleSheet.create({
   profileSectionHeading: { marginTop: 22, marginBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   profileSectionTitle: { color: '#14233B', fontSize: 16, fontWeight: '800' },
   profileDataSectionTitle: { marginTop: 22, marginBottom: 10, color: '#14233B', fontSize: 16, fontWeight: '800' },
+  profileTrailRow: { marginTop: 14, minHeight: 68, paddingHorizontal: 13, paddingVertical: 11, borderRadius: 16, backgroundColor: '#FFFFFF', flexDirection: 'row', alignItems: 'center', gap: 11 },
+  trailMap: { flex: 1, minHeight: 420 },
+  trailSummaryCard: { padding: 20, backgroundColor: '#14233B', borderTopLeftRadius: 22, borderTopRightRadius: 22 },
+  trailSummaryTitle: { color: '#FFFFFF', fontSize: 20, fontWeight: '900' },
+  trailSummaryStats: { marginTop: 8, color: '#FFB09A', fontSize: 17, fontWeight: '800' },
+  trailSummaryCopy: { marginTop: 8, color: '#B8C1CD', fontSize: 11, lineHeight: 17 },
   profileSectionCount: { color: '#657283', fontSize: 10, fontWeight: '700' },
   savedRouteList: { gap: 8 },
   savedRouteRow: { minHeight: 64, paddingHorizontal: 11, paddingVertical: 9, borderRadius: 14, borderWidth: 1, borderColor: '#E7ECF0', backgroundColor: '#FFFFFF', flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -1419,6 +1518,11 @@ const styles = StyleSheet.create({
   personalRunSummaryValue: { color: '#FFFFFF', fontSize: 18, fontWeight: '900', textAlign: 'center' },
   personalRunSummaryLabel: { marginTop: 3, color: '#B8C1CD', fontSize: 9, textAlign: 'center' },
   personalRunSummaryDivider: { width: StyleSheet.hairlineWidth, height: 30, backgroundColor: '#566276' },
+  runPeriodTabs: { marginBottom: 12, padding: 4, borderRadius: 12, backgroundColor: '#EEF3F6', flexDirection: 'row' },
+  runPeriodTab: { flex: 1, paddingVertical: 8, borderRadius: 9, alignItems: 'center' },
+  runPeriodTabActive: { backgroundColor: '#FFFFFF' },
+  runPeriodTabText: { color: '#657283', fontSize: 12, fontWeight: '700' },
+  runPeriodTabTextActive: { color: '#E94D2A' },
   personalRunSyncBar: { minHeight: 42, marginBottom: 8, paddingHorizontal: 12, borderRadius: 12, backgroundColor: '#EAF6EF', flexDirection: 'row', alignItems: 'center', gap: 8 },
   personalRunSyncDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#38A269' },
   personalRunSyncText: { flex: 1, color: '#3C6F51', fontSize: 9 },

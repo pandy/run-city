@@ -23,6 +23,8 @@ export type HealthWorkoutRecord = {
 
 export type HealthKitSyncResult = {
   records: HealthWorkoutRecord[];
+  queriedWorkoutCount: number;
+  matchedWorkoutCount: number;
   deletedRecordIds: string[];
   newAnchor: string;
 };
@@ -78,6 +80,17 @@ function healthKitUnavailableMessage(error: unknown) {
   return message || 'Apple 健康同步失败，请稍后重试。';
 }
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | undefined> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([promise, new Promise<undefined>((resolve) => {
+      timer = setTimeout(() => resolve(undefined), timeoutMs);
+    })]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export function isHealthKitPlatformSupported() {
   return Platform.OS === 'ios';
 }
@@ -113,34 +126,38 @@ export async function syncHealthKitRunningWorkouts(anchor?: string): Promise<Hea
   }
   try {
     const healthKit = await import('@kingstinct/react-native-healthkit');
+    // Always query without a native activity predicate. Garmin and some
+    // other writers occasionally use the `other` subtype for valid runs.
+    // A missing anchor performs a complete history refresh.
     const response = await healthKit.queryWorkoutSamplesWithAnchor({
-      limit: 0,
+      limit: -1,
       anchor,
-      filter: { workoutActivityType: healthKit.WorkoutActivityType.running },
+      filter: undefined,
     });
     const records: HealthWorkoutRecord[] = [];
     const workouts = [...response.workouts];
+    const activityWorkouts = workouts.filter((workout) => {
+      const source = `${workout.sourceRevision.source.name} ${workout.sourceRevision.source.bundleIdentifier} ${workout.device?.name} ${workout.device?.manufacturer} ${workout.device?.model}`;
+      return /garmin|sigma|咕咚|codoon|strava/i.test(source)
+        || workout.workoutActivityType === healthKit.WorkoutActivityType.running;
+    });
 
-    for (let batchStart = 0; batchStart < workouts.length; batchStart += 4) {
-      const batch = workouts.slice(batchStart, batchStart + 4);
-      const converted = await Promise.all(batch.map(async (workout) => {
+    for (let batchStart = 0; batchStart < activityWorkouts.length; batchStart += 8) {
+      const batch = activityWorkouts.slice(batchStart, batchStart + 8);
+      const converted = await Promise.allSettled(batch.map(async (workout) => {
         const sourceName = workout.sourceRevision.source.name || 'Apple 健康';
         const sourceBundleIdentifier = workout.sourceRevision.source.bundleIdentifier;
-        const isGarmin = /garmin/i.test(`${sourceName} ${sourceBundleIdentifier}`);
+        const deviceName = workout.device?.name ?? workout.device?.model;
+        const isGarmin = /garmin/i.test(`${sourceName} ${sourceBundleIdentifier} ${deviceName ?? ''} ${workout.device?.manufacturer ?? ''}`);
         let routePoints: Coordinate[] = [];
-        if (!isGarmin) {
-          try {
-            const routes = await workout.getWorkoutRoutes();
-            routePoints = routes.flatMap((route) => route.locations)
-              .filter((location) => validCoordinate(location.latitude, location.longitude))
-              .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-              .map((location) => ({
-                latitude: location.latitude,
-                longitude: location.longitude,
-              }));
-          } catch {
-            routePoints = [];
-          }
+        try {
+          const routes = await withTimeout(workout.getWorkoutRoutes(), 2500);
+          routePoints = (routes ?? []).flatMap((route) => route.locations)
+            .filter((location) => validCoordinate(location.latitude, location.longitude))
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+            .map((location) => ({ latitude: location.latitude, longitude: location.longitude }));
+        } catch {
+          routePoints = [];
         }
         const displayPoints = capRoutePoints(routePoints);
         const distanceKm = workout.totalDistance?.quantity === undefined
@@ -152,7 +169,7 @@ export async function syncHealthKitRunningWorkouts(anchor?: string): Promise<Hea
           source: isGarmin ? 'garmin' as const : 'apple-health' as const,
           sourceName,
           sourceBundleIdentifier,
-          deviceName: workout.device?.name ?? workout.device?.model,
+          deviceName,
           sport: 'running' as const,
           startTime: new Date(workout.startDate).toISOString(),
           endTime: new Date(workout.endDate).toISOString(),
@@ -169,11 +186,15 @@ export async function syncHealthKitRunningWorkouts(anchor?: string): Promise<Hea
           validationStatus: 'healthkit' as const,
         };
       }));
-      records.push(...converted);
+      converted.forEach((result) => {
+        if (result.status === 'fulfilled') records.push(result.value);
+      });
     }
 
     return {
       records,
+      queriedWorkoutCount: workouts.length,
+      matchedWorkoutCount: activityWorkouts.length,
       deletedRecordIds: response.deletedSamples.map((sample) => `healthkit:${sample.uuid}`),
       newAnchor: response.newAnchor,
     };
