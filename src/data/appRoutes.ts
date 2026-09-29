@@ -5,6 +5,7 @@ import { phase1RouteCandidates, RouteCandidate } from './phase1RouteCandidates';
 import { centuryParkPerimeter } from './centuryPark';
 import { supplementalRouteSpecs } from './supplementalRoutes';
 import { parcoRouteCandidates } from './parcoRouteCandidates.generated';
+import { parcoRouteGeometries } from './parcoRouteGeometries.generated';
 import { wgs84ToGcj02 } from '../lib/coordinates';
 
 export type Coordinate = {
@@ -276,19 +277,26 @@ const parcoDiscoveryRoutes: AppRoute[] = parcoRouteCandidates.map((route) => ({
   rank: route.rank,
   cityId: route.cityId,
   name: route.name,
-  distance: `${route.distanceKm.toFixed(1)} km`,
-  duration: durationFor(route.distanceKm),
-  difficulty: difficultyFor(route.distanceKm),
+  distance: `${(parcoRouteGeometries[route.id]?.distanceKm ?? route.distanceKm).toFixed(1)} km`,
+  duration: durationFor(parcoRouteGeometries[route.id]?.distanceKm ?? route.distanceKm),
+  difficulty: difficultyFor(parcoRouteGeometries[route.id]?.distanceKm ?? route.distanceKm),
   elevation: '待核验',
-  tag: 'Parco 发现 · 跑城待核验',
-  summary: '由 Parco 城市跑步指南发现；跑城已完成城市归属和重复名称检查，轨迹仍将使用公开路网独立重建。',
+  tag: parcoRouteGeometries[route.id] ? 'Parco 来源 · 轨迹已接入' : 'Parco 发现 · 跑城待核验',
+  summary: parcoRouteGeometries[route.id]
+    ? '已接入 Parco 公开地点轨迹，并转换为跑城地图坐标；来源页可查看开放时间和设施信息。'
+    : '由 Parco 城市跑步指南发现；跑城已完成城市归属和重复名称检查，轨迹仍待接入。',
   bestTime: '请查看来源页的开放时间与设施信息',
-  note: '当前仅展示地点、参考里程和来源链接。完成 OSM 轨迹重建与底图目视核验后再开放路线预览和起点导航。',
+  note: parcoRouteGeometries[route.id]
+    ? '轨迹来自 Parco 地点课程数据；出发前请查看来源页并确认现场开放状态。'
+    : '完成轨迹接入前不提供路线预览和起点导航。',
   evidenceUrl: route.evidenceUrl,
-  geometryStatus: 'pending',
-  statusLabel: 'Parco 候选 · 轨迹待重建',
-  start: { ...route.location },
-  coordinates: [],
+  geometryStatus: parcoRouteGeometries[route.id] ? 'mapped' : 'pending',
+  statusLabel: parcoRouteGeometries[route.id] ? 'Parco 来源 · 轨迹已接入' : 'Parco 候选 · 轨迹待重建',
+  start: parcoRouteGeometries[route.id]?.coordinates[0] ?? { ...route.location },
+  amapStart: parcoRouteGeometries[route.id]?.coordinates[0]
+    ? wgs84ToGcj02(parcoRouteGeometries[route.id].coordinates[0])
+    : undefined,
+  coordinates: parcoRouteGeometries[route.id]?.coordinates.map((coordinate) => ({ ...coordinate })) ?? [],
 }));
 
 export const appRoutes: AppRoute[] = [

@@ -16,6 +16,7 @@
     "build:route-overrides": "node scripts/build-curated-route-overrides.mjs",
     "build:route-library": "node scripts/build-50-city-route-library.mjs",
     "build:parco-candidates": "node scripts/build-parco-route-candidates.mjs",
+    "build:parco-geometries": "node scripts/build-parco-route-geometries.mjs",
     "audit:route-library": "node scripts/audit-route-library.mjs",
     "codoon:check": "python3 tools/codoon_migrate.py --limit 3",
     "codoon:export": "python3 tools/codoon_migrate.py",

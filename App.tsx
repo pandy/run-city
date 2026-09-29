@@ -39,6 +39,7 @@ const HEALTHKIT_RUNS_FILE_NAME = 'run-city-healthkit-runs.json';
 type LocationStatus = 'loading' | 'ready' | 'denied' | 'unavailable' | 'error';
 type HealthSyncStatus = 'unavailable' | 'not-connected' | 'connecting' | 'syncing' | 'ready' | 'error';
 type RunPeriod = 'day' | 'month' | 'year';
+type TrailCity = { id: string; name: string; province: string };
 
 type PersonalRun = {
   id: string;
@@ -230,6 +231,10 @@ function formatRunDate(value?: string) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
+function formatRunDistance(value?: number) {
+  return value === undefined || !Number.isFinite(value) ? '—' : `${Math.round(value)} km`;
+}
+
 function formatRunDay(value?: string) {
   const date = new Date(value ?? '');
   return Number.isFinite(date.getTime()) ? String(date.getDate()).padStart(2, '0') : '--';
@@ -298,6 +303,7 @@ export default function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [personalRunsOpen, setPersonalRunsOpen] = useState(false);
   const [trailOpen, setTrailOpen] = useState(false);
+  const [trailCityByRunId, setTrailCityByRunId] = useState<Record<string, TrailCity>>({});
   const [selectedPersonalRunId, setSelectedPersonalRunId] = useState<string>();
   const [runPeriod, setRunPeriod] = useState<RunPeriod>('month');
   const [importedPersonalRuns, setImportedPersonalRuns] = useState<PersonalRun[]>([]);
@@ -372,7 +378,7 @@ export default function App() {
   const trailMarkers = useMemo(() => personalRuns.map((run) => {
     const point = run.encodedPath ? decodePolyline(run.encodedPath)[0] : undefined;
     if (!point) return undefined;
-    let nearest = coreCities[0];
+    let nearest: TrailCity = coreCities[0];
     let best = Number.POSITIVE_INFINITY;
     coreCities.forEach((item) => {
       const center = cityCenters[item.id];
@@ -380,8 +386,38 @@ export default function App() {
       const distance = (center.latitude - point.latitude) ** 2 + (center.longitude - point.longitude) ** 2;
       if (distance < best) { best = distance; nearest = item; }
     });
-    return { run, point, city: nearest };
-  }).filter(Boolean) as Array<{ run: PersonalRun; point: Coordinate; city: typeof coreCities[number] }>, [personalRuns]);
+    return { run, point, city: trailCityByRunId[run.id] ?? nearest };
+  }).filter(Boolean) as Array<{ run: PersonalRun; point: Coordinate; city: TrailCity }>, [personalRuns, trailCityByRunId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const points = personalRuns.map((run) => ({ run, point: run.encodedPath ? decodePolyline(run.encodedPath)[0] : undefined }))
+      .filter((item): item is { run: PersonalRun; point: Coordinate } => Boolean(item.point));
+    if (!points.length) {
+      setTrailCityByRunId({});
+      return () => { cancelled = true; };
+    }
+    void Promise.all(points.map(async ({ run, point }) => {
+      try {
+        const [address] = await Location.reverseGeocodeAsync(point);
+        const cityText = address?.city || address?.subregion;
+        if (!cityText) return undefined;
+        const normalizedCity = cityText.replace(/[市区县]$/, '');
+        const matched = coreCities.find((item) => item.name.replace(/[市区县]$/, '') === normalizedCity);
+        return [run.id, matched ?? {
+          id: `geocoded:${normalizedCity}`,
+          name: cityText,
+          province: address?.region || '其他地区',
+        }] as const;
+      } catch {
+        return undefined;
+      }
+    })).then((resolved) => {
+      if (cancelled) return;
+      setTrailCityByRunId(Object.fromEntries(resolved.filter(Boolean) as Array<readonly [string, TrailCity]>));
+    });
+    return () => { cancelled = true; };
+  }, [personalRuns]);
   const trailProvinceCount = useMemo(() => new Set(trailMarkers.map((item) => item.city.province)).size, [trailMarkers]);
   const periodRuns = useMemo(() => runsForPeriod(personalRuns, runPeriod), [personalRuns, runPeriod]);
   const periodDistanceKm = useMemo(
@@ -494,7 +530,10 @@ export default function App() {
     setHealthSyncError(undefined);
     try {
       if (requestPermission) await authorizeHealthKit();
-      const result = await syncHealthKitRunningWorkouts(forceFull ? undefined : healthKitAnchorRef.current);
+      const result = await syncHealthKitRunningWorkouts(
+        forceFull ? healthKitAnchorRef.current : healthKitAnchorRef.current,
+        forceFull,
+      );
       const deleted = new Set(result.deletedRecordIds);
       const merged = new Map<string, PersonalRun>();
       healthKitRunsRef.current.forEach((run) => {
@@ -832,7 +871,7 @@ export default function App() {
           renderItem={({ item }) => (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`${formatRunDate(item.startTime)}，${item.distanceKm?.toFixed(2) ?? '未知'}公里`}
+              accessibilityLabel={`${formatRunDate(item.startTime)}，${formatRunDistance(item.distanceKm)}`}
               onPress={() => setSelectedPersonalRunId(item.id)}
               style={({ pressed }) => [styles.personalRunRow, pressed && styles.savedRouteRowPressed]}
             >
@@ -841,7 +880,7 @@ export default function App() {
                 <Text style={styles.personalRunDateMonth}>{item.startTime ? String(new Date(item.startTime).getMonth() + 1).padStart(2, '0') : '--'}月</Text>
               </View>
               <View style={styles.personalRunRowCopy}>
-                <Text style={styles.personalRunRowTitle}>{personalRunSourceLabel(item)} · {item.distanceKm?.toFixed(2) ?? '—'} km</Text>
+                <Text style={styles.personalRunRowTitle}>{personalRunSourceLabel(item)} · {formatRunDistance(item.distanceKm)}</Text>
                 <Text style={styles.personalRunRowMeta}>
                   {formatRunDate(item.startTime)} · {formatRunDuration(item.durationSeconds)} · {formatRunPace(item.averagePaceSecondsPerKm)}/km
                 </Text>
@@ -1423,7 +1462,7 @@ function PersonalRunDetail({ run, onBack }: { run: PersonalRun; onBack: () => vo
           </Text>
           <Text style={styles.personalRunDetailTitle}>{formatRunDate(run.startTime)}</Text>
           <View style={styles.personalRunDetailMetrics}>
-            <Metric value={`${run.distanceKm?.toFixed(2) ?? '—'} km`} label="距离" />
+            <Metric value={formatRunDistance(run.distanceKm)} label="距离" />
             <Metric value={formatRunDuration(run.durationSeconds)} label="运动时间" />
             <Metric value={`${formatRunPace(run.averagePaceSecondsPerKm)}/km`} label="平均配速" />
           </View>

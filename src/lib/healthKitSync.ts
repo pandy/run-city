@@ -33,6 +33,7 @@ export type HealthKitSyncResult = {
 const WORKOUT_TYPE = 'HKWorkoutTypeIdentifier' as const;
 const WORKOUT_ROUTE_TYPE = 'HKWorkoutRouteTypeIdentifier' as const;
 const HEART_RATE_TYPE = 'HKQuantityTypeIdentifierHeartRate' as const;
+const DISTANCE_WALKING_RUNNING_TYPE = 'HKQuantityTypeIdentifierDistanceWalkingRunning' as const;
 const MAXIMUM_ROUTE_POINTS = 900;
 
 function encodePolyline(points: Coordinate[]) {
@@ -107,7 +108,7 @@ export async function authorizeHealthKit() {
       throw new Error('这台设备无法使用 Apple 健康。');
     }
     await healthKit.requestAuthorization({
-      toRead: [WORKOUT_TYPE, WORKOUT_ROUTE_TYPE, HEART_RATE_TYPE],
+      toRead: [WORKOUT_TYPE, WORKOUT_ROUTE_TYPE, HEART_RATE_TYPE, DISTANCE_WALKING_RUNNING_TYPE],
     });
     await healthKit.configureBackgroundTypes(
       [WORKOUT_TYPE],
@@ -122,7 +123,7 @@ export async function authorizeHealthKit() {
   }
 }
 
-export async function syncHealthKitRunningWorkouts(anchor?: string): Promise<HealthKitSyncResult> {
+export async function syncHealthKitRunningWorkouts(anchor?: string, forceFull = false): Promise<HealthKitSyncResult> {
   if (!isHealthKitPlatformSupported()) {
     throw new Error('Apple 健康同步仅支持 iPhone。');
   }
@@ -131,11 +132,13 @@ export async function syncHealthKitRunningWorkouts(anchor?: string): Promise<Hea
     // Always query without a native activity predicate. Garmin and some
     // other writers occasionally use the `other` subtype for valid runs.
     // A missing anchor performs a complete history refresh.
-    const response = await healthKit.queryWorkoutSamplesWithAnchor({
-      limit: -1,
-      anchor,
-      filter: undefined,
-    });
+    const response = forceFull || !anchor
+      ? {
+        workouts: await healthKit.queryWorkoutSamples({ limit: -1, ascending: false, filter: undefined }),
+        deletedSamples: [],
+        newAnchor: anchor ?? '',
+      }
+      : await healthKit.queryWorkoutSamplesWithAnchor({ limit: -1, anchor, filter: undefined });
     const records: HealthWorkoutRecord[] = [];
     const workouts = [...response.workouts];
     const activityWorkouts = workouts.filter((workout) => {
@@ -153,7 +156,7 @@ export async function syncHealthKitRunningWorkouts(anchor?: string): Promise<Hea
         const isGarmin = /garmin/i.test(`${sourceName} ${sourceBundleIdentifier} ${deviceName ?? ''} ${workout.device?.manufacturer ?? ''}`);
         let routePoints: Coordinate[] = [];
         try {
-          const routes = await withTimeout(workout.getWorkoutRoutes(), 2500);
+          const routes = await withTimeout(workout.getWorkoutRoutes(), 10000);
           routePoints = (routes ?? []).flatMap((route) => route.locations)
             .filter((location) => validCoordinate(location.latitude, location.longitude))
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
@@ -164,8 +167,13 @@ export async function syncHealthKitRunningWorkouts(anchor?: string): Promise<Hea
         const displayPoints = capRoutePoints(routePoints);
         const heartRateStats = await withTimeout(
           workout.getStatistic(HEART_RATE_TYPE, 'count/min'),
-          2500,
+          5000,
         );
+        const allStatistics = heartRateStats?.averageQuantity ? undefined : await withTimeout(
+          workout.getAllStatistics(),
+          5000,
+        );
+        const resolvedHeartRateStats = heartRateStats ?? allStatistics?.[HEART_RATE_TYPE];
         const distanceKm = workout.totalDistance?.quantity === undefined
           ? undefined
           : workout.totalDistance.quantity / 1000;
@@ -184,7 +192,7 @@ export async function syncHealthKitRunningWorkouts(anchor?: string): Promise<Hea
           averagePaceSecondsPerKm: distanceKm && durationSeconds
             ? durationSeconds / distanceKm
             : undefined,
-          averageHeartRate: heartRateStats?.averageQuantity?.quantity,
+          averageHeartRate: resolvedHeartRateStats?.averageQuantity?.quantity,
           calories: workout.totalEnergyBurned?.quantity,
           coordinateSystem: 'wgs84' as const,
           encodedPath: encodePolyline(displayPoints),
