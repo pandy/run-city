@@ -219,7 +219,7 @@ function parseProjectCities() {
     if (!center) throw new Error(`Missing center for ${match[1]}`);
     cities.push({ id: match[1], name: match[2], province: match[3], phase: Number(match[4]), center });
   }
-  if (cities.length !== 50) throw new Error(`Expected 50 cities, found ${cities.length}`);
+  if (cities.length !== 100) throw new Error(`Expected 100 cities, found ${cities.length}`);
   return cities;
 }
 

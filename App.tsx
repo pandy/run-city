@@ -1054,7 +1054,7 @@ export default function App() {
             <View style={styles.sheetHandle} />
             <View style={styles.cityPanelHeader}>
               <View>
-                <Text style={styles.cityPanelEyebrow}>50 城路线库</Text>
+                <Text style={styles.cityPanelEyebrow}>100 城路线库</Text>
                 <Text style={styles.cityPanelTitle}>选择一座城市</Text>
               </View>
               <View style={styles.cityCountBadge}>
@@ -1062,7 +1062,7 @@ export default function App() {
                 <Text style={styles.cityCountBadgeLabel}>城市可用</Text>
               </View>
             </View>
-            <Text style={styles.cityOverviewCopy}>点城市卡片后，进入该城市的地图与 10 条精选跑步路线。</Text>
+            <Text style={styles.cityOverviewCopy}>前 50 城提供 10 条路线，新增 50 城先提供 3 条候选路线。</Text>
             <TextInput
               value={cityQuery}
               onChangeText={setCityQuery}
@@ -1227,7 +1227,7 @@ export default function App() {
           <>
 
         <View style={styles.intro}>
-          <Text style={styles.eyebrow}>跑步城市名片 · 50 城计划</Text>
+          <Text style={styles.eyebrow}>跑步城市名片 · 100 城计划</Text>
           <Text style={styles.title}>
             {city.name}{cityRoutes.length > 0 ? ` ${cityRoutes.length} 大跑步路线` : ' 跑步路线'}
           </Text>
@@ -1344,7 +1344,7 @@ export default function App() {
           <View style={styles.emptySheet}>
           <View style={styles.sheetHandle} />
           <Text style={styles.emptySheetTitle}>{city.name}路线正在整理</Text>
-          <Text style={styles.emptySheetCopy}>城市已经加入 50 城路线库。完成路线筛选、公开 GPX 匹配和地图核验后，会在这里显示首批 10 条路线。</Text>
+          <Text style={styles.emptySheetCopy}>城市已经加入 100 城路线库。完成路线筛选、公开 GPX 匹配和地图核验后，会在这里显示精选路线。</Text>
           <Pressable onPress={() => setCityOverviewOpen(true)} style={styles.secondaryButton}>
             <Text style={styles.secondaryButtonText}>查看其他城市</Text>
           </Pressable>

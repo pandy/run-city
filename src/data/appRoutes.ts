@@ -3,6 +3,7 @@ import { curatedRouteOverrides } from './curatedRouteOverrides.generated';
 import { mappedRouteGeometries } from './mappedRoutes.generated';
 import { phase1RouteCandidates, RouteCandidate } from './phase1RouteCandidates';
 import { centuryParkPerimeter } from './centuryPark';
+import { supplementalRouteSpecs } from './supplementalRoutes';
 import { wgs84ToGcj02 } from '../lib/coordinates';
 
 export type Coordinate = {
@@ -250,7 +251,26 @@ const fallbackRoutes: AppRoute[] = phase1RouteCandidates
     };
   });
 
-export const appRoutes: AppRoute[] = [...generatedRoutes, ...fallbackRoutes];
+const supplementalRoutes: AppRoute[] = supplementalRouteSpecs.map((route) => ({
+  id: `${route.cityId}-candidate-${route.rank}`,
+  rank: route.rank,
+  cityId: route.cityId,
+  name: route.name,
+  distance: '待核验',
+  duration: '待核验',
+  difficulty: '待核验',
+  elevation: '待核验',
+  tag: '候选路线 · 待核验',
+  summary: '已进入 100 城候选路线库；公开路网轨迹尚未通过位置、里程和道路贴合检查。',
+  bestTime: '完成实地与开放时间核验后公布',
+  note: '为避免路线与地图错位，完成公开 OSM/GPX 轨迹核验前不绘制示例线，也不开放起点导航。',
+  evidenceUrl: `https://www.openstreetmap.org/search?query=${encodeURIComponent(`${route.cityName} ${route.name}`)}`,
+  geometryStatus: 'pending',
+  statusLabel: '路线候选 · 轨迹待核验',
+  coordinates: [],
+}));
+
+export const appRoutes: AppRoute[] = [...generatedRoutes, ...fallbackRoutes, ...supplementalRoutes];
 
 export function routesForCity(cityId: string) {
   return appRoutes.filter((route) => route.cityId === cityId);

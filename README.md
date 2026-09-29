@@ -64,7 +64,7 @@ Apple Watch 和支持写入训练路线的手机 App 可以同步 GPS 轨迹。G
 
 ## 路线库扩展
 
-首批 50 个中国大陆核心城市记录在 `src/data/coreCities.ts`。500 条路线的来源许可、GPX 导入、坐标系和地图对齐要求见 `store/route-production-spec.md`。
+100 个中国大陆核心城市记录在 `src/data/coreCities.ts`：前 50 城为 500 条完整路线，新增 50 城先提供 150 条候选路线。候选路线在公开 OSM/GPX 轨迹通过地图对齐检查前，不绘制示例轨迹，也不开放起点导航。来源许可、GPX 导入、坐标系和地图对齐要求见 `store/route-production-spec.md`。
 
 ```bash
 npm run build:app-routes

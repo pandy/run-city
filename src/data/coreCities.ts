@@ -5,7 +5,7 @@ export type CoreCity = {
   phase: 1 | 2 | 3;
 };
 
-// 中国大陆首批 50 个核心城市：覆盖超大城市、区域中心、重点旅游与跑步目的地。
+// 中国大陆 100 个核心城市：前 50 城为完整十条路线库，后 50 城先提供三条候选路线。
 export const coreCities: CoreCity[] = [
   { id: 'beijing', name: '北京', province: '北京市', phase: 1 }, { id: 'shanghai', name: '上海', province: '上海市', phase: 1 },
   { id: 'guangzhou', name: '广州', province: '广东省', phase: 1 }, { id: 'shenzhen', name: '深圳', province: '广东省', phase: 1 },
@@ -32,4 +32,29 @@ export const coreCities: CoreCity[] = [
   { id: 'lhasa', name: '拉萨', province: '西藏自治区', phase: 3 }, { id: 'jiaxing', name: '嘉兴', province: '浙江省', phase: 3 },
   { id: 'shaoxing', name: '绍兴', province: '浙江省', phase: 3 }, { id: 'wenzhou', name: '温州', province: '浙江省', phase: 3 },
   { id: 'jinhua', name: '金华', province: '浙江省', phase: 3 }, { id: 'taizhou', name: '台州', province: '浙江省', phase: 3 },
+  { id: 'zhuhai', name: '珠海', province: '广东省', phase: 3 }, { id: 'zhongshan', name: '中山', province: '广东省', phase: 3 },
+  { id: 'huizhou', name: '惠州', province: '广东省', phase: 3 }, { id: 'jiangmen', name: '江门', province: '广东省', phase: 3 },
+  { id: 'shantou', name: '汕头', province: '广东省', phase: 3 }, { id: 'nantong', name: '南通', province: '江苏省', phase: 3 },
+  { id: 'yangzhou', name: '扬州', province: '江苏省', phase: 3 }, { id: 'zhenjiang', name: '镇江', province: '江苏省', phase: 3 },
+  { id: 'yancheng', name: '盐城', province: '江苏省', phase: 3 }, { id: 'xuzhou', name: '徐州', province: '江苏省', phase: 3 },
+  { id: 'huzhou', name: '湖州', province: '浙江省', phase: 3 }, { id: 'zhoushan', name: '舟山', province: '浙江省', phase: 3 },
+  { id: 'quzhou', name: '衢州', province: '浙江省', phase: 3 }, { id: 'wuhu', name: '芜湖', province: '安徽省', phase: 3 },
+  { id: 'huangshan', name: '黄山', province: '安徽省', phase: 3 }, { id: 'ganzhou', name: '赣州', province: '江西省', phase: 3 },
+  { id: 'jiujiang', name: '九江', province: '江西省', phase: 3 }, { id: 'shangrao', name: '上饶', province: '江西省', phase: 3 },
+  { id: 'zibo', name: '淄博', province: '山东省', phase: 3 }, { id: 'weihai', name: '威海', province: '山东省', phase: 3 },
+  { id: 'linyi', name: '临沂', province: '山东省', phase: 3 }, { id: 'weifang', name: '潍坊', province: '山东省', phase: 3 },
+  { id: 'taian', name: '泰安', province: '山东省', phase: 3 }, { id: 'kaifeng', name: '开封', province: '河南省', phase: 3 },
+  { id: 'xuchang', name: '许昌', province: '河南省', phase: 3 }, { id: 'yichang', name: '宜昌', province: '湖北省', phase: 3 },
+  { id: 'xiangyang', name: '襄阳', province: '湖北省', phase: 3 }, { id: 'jingzhou', name: '荆州', province: '湖北省', phase: 3 },
+  { id: 'yueyang', name: '岳阳', province: '湖南省', phase: 3 }, { id: 'zhuzhou', name: '株洲', province: '湖南省', phase: 3 },
+  { id: 'hengyang', name: '衡阳', province: '湖南省', phase: 3 }, { id: 'guilin', name: '桂林', province: '广西壮族自治区', phase: 3 },
+  { id: 'liuzhou', name: '柳州', province: '广西壮族自治区', phase: 3 }, { id: 'beihai', name: '北海', province: '广西壮族自治区', phase: 3 },
+  { id: 'chongzuo', name: '崇左', province: '广西壮族自治区', phase: 3 }, { id: 'baise', name: '百色', province: '广西壮族自治区', phase: 3 },
+  { id: 'mianyang', name: '绵阳', province: '四川省', phase: 3 }, { id: 'leshan', name: '乐山', province: '四川省', phase: 3 },
+  { id: 'deyang', name: '德阳', province: '四川省', phase: 3 }, { id: 'nanchong', name: '南充', province: '四川省', phase: 3 },
+  { id: 'zunyi', name: '遵义', province: '贵州省', phase: 3 }, { id: 'dali', name: '大理', province: '云南省', phase: 3 },
+  { id: 'lijiang', name: '丽江', province: '云南省', phase: 3 }, { id: 'xishuangbanna', name: '西双版纳', province: '云南省', phase: 3 },
+  { id: 'qinhuangdao', name: '秦皇岛', province: '河北省', phase: 3 }, { id: 'tangshan', name: '唐山', province: '河北省', phase: 3 },
+  { id: 'baoding', name: '保定', province: '河北省', phase: 3 }, { id: 'datong', name: '大同', province: '山西省', phase: 3 },
+  { id: 'ordos', name: '鄂尔多斯', province: '内蒙古自治区', phase: 3 }, { id: 'kashgar', name: '喀什', province: '新疆维吾尔自治区', phase: 3 },
 ];

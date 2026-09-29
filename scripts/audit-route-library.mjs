@@ -158,7 +158,7 @@ const report = {
 };
 
 const markdown = [
-  '# 50 城跑步路线库审计',
+  '# 首批 50 城完整路线库审计',
   '',
   `- 完整城市：${report.completeCities}/50`,
   `- 路线总数：${report.routeCount}/500`,
