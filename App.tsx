@@ -1062,7 +1062,7 @@ export default function App() {
                 <Text style={styles.cityCountBadgeLabel}>城市可用</Text>
               </View>
             </View>
-            <Text style={styles.cityOverviewCopy}>前 50 城提供 10 条路线，新增 50 城先提供 3 条候选路线。</Text>
+            <Text style={styles.cityOverviewCopy}>前 50 城已有 10 条核心路线；其中 35 城新增 Parco 来源候选，新增 50 城先提供 3 条候选路线。</Text>
             <TextInput
               value={cityQuery}
               onChangeText={setCityQuery}
@@ -1229,11 +1229,11 @@ export default function App() {
         <View style={styles.intro}>
           <Text style={styles.eyebrow}>跑步城市名片 · 100 城计划</Text>
           <Text style={styles.title}>
-            {city.name}{cityRoutes.length > 0 ? ` ${cityRoutes.length} 大跑步路线` : ' 跑步路线'}
+            {city.name}{cityRoutes.length > 0 ? ` ${cityRoutes.length} 条跑步路线` : ' 跑步路线'}
           </Text>
           <Text style={styles.subtitle}>
             {cityRoutes.length > 0
-              ? '每条轨迹均经过位置、闭环、里程和重复度检查。'
+              ? '已核验路线优先展示；来源候选完成公开路网重建后再显示轨迹。'
               : '城市已进入路线库，10 条精选路线正在整理。'}
           </Text>
         </View>

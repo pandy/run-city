@@ -4,6 +4,7 @@ import { mappedRouteGeometries } from './mappedRoutes.generated';
 import { phase1RouteCandidates, RouteCandidate } from './phase1RouteCandidates';
 import { centuryParkPerimeter } from './centuryPark';
 import { supplementalRouteSpecs } from './supplementalRoutes';
+import { parcoRouteCandidates } from './parcoRouteCandidates.generated';
 import { wgs84ToGcj02 } from '../lib/coordinates';
 
 export type Coordinate = {
@@ -270,7 +271,32 @@ const supplementalRoutes: AppRoute[] = supplementalRouteSpecs.map((route) => ({
   coordinates: [],
 }));
 
-export const appRoutes: AppRoute[] = [...generatedRoutes, ...fallbackRoutes, ...supplementalRoutes];
+const parcoDiscoveryRoutes: AppRoute[] = parcoRouteCandidates.map((route) => ({
+  id: route.id,
+  rank: route.rank,
+  cityId: route.cityId,
+  name: route.name,
+  distance: `${route.distanceKm.toFixed(1)} km`,
+  duration: durationFor(route.distanceKm),
+  difficulty: difficultyFor(route.distanceKm),
+  elevation: '待核验',
+  tag: 'Parco 发现 · 跑城待核验',
+  summary: '由 Parco 城市跑步指南发现；跑城已完成城市归属和重复名称检查，轨迹仍将使用公开路网独立重建。',
+  bestTime: '请查看来源页的开放时间与设施信息',
+  note: '当前仅展示地点、参考里程和来源链接。完成 OSM 轨迹重建与底图目视核验后再开放路线预览和起点导航。',
+  evidenceUrl: route.evidenceUrl,
+  geometryStatus: 'pending',
+  statusLabel: 'Parco 候选 · 轨迹待重建',
+  start: { ...route.location },
+  coordinates: [],
+}));
+
+export const appRoutes: AppRoute[] = [
+  ...generatedRoutes,
+  ...fallbackRoutes,
+  ...supplementalRoutes,
+  ...parcoDiscoveryRoutes,
+];
 
 export function routesForCity(cityId: string) {
   return appRoutes.filter((route) => route.cityId === cityId);
